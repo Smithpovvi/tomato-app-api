@@ -1,0 +1,78 @@
+name: Deploy
+
+on:
+  push:
+    branches: [production]
+
+env:
+  PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+  GKE_CLUSTER: cluster-1
+  GKE_ZONE: us-central1-c
+  DEPLOYMENT_NAME: x-collection-auto-deployment
+  IMAGE: smithpovvi/x-collection
+
+jobs:
+  deploy:
+    name: Kubernetes Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: google-github-actions/setup-gcloud@94337306dda8180d967a56932ceb4ddcf01edae7
+        with:
+          service_account_key: ${{ secrets.GKE_SA_KEY }}
+          project_id: ${{ secrets.GKE_PROJECT }}
+
+      - run: |-
+          gcloud --quiet auth configure-docker
+
+      - uses: google-github-actions/get-gke-credentials@fb08709ba27618c31c09e014e1d8364b02e5042e
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_ZONE }}
+          credentials: ${{ secrets.GKE_SA_KEY }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Set up Docker Build
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/x-collection:0.0.1-SNAPSHOT
+
+      - name: Replace Environment Variables
+        uses: danielr1996/envsubst-action@1.0.0
+        env:
+          MARIADB_HOST: ${{ secrets.MARIADB_HOST }}
+          MARIADB_NAME: ${{ secrets.MARIADB_NAME }}
+          MARIADB_PASSWORD: ${{ secrets.MARIADB_PASSWORD }}
+          MARIADB_PORT: ${{ secrets.MARIADB_PORT }}
+          MARIADB_USER: ${{ secrets.MARIADB_USER }}
+          PORT: ${{ secrets.PORT }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          FACEBOOK_CLIENT_ID: ${{ secrets.FACEBOOK_CLIENT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+        with:
+          input: ./kubernetes-deployment/deployment.yaml
+          output: ./kubernetes-deployment/deploy.yaml
+
+      - name: Deploy
+        working-directory: ./kubernetes-deployment
+        run: |-
+          kubectl apply -f deploy.yaml

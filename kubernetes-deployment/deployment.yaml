@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x-collection-auto-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: x-collection-auto-deployment
+  template:
+    metadata:
+      labels:
+        app: x-collection-auto-deployment
+    spec:
+      containers:
+        - name: x-collection
+          image: smithpovvi/x-collection:0.0.1-SNAPSHOT
+          imagePullPolicy: Always
+          env:
+          - name: MARIADB_HOST
+            value: "$MARIADB_HOST"
+          - name: MARIADB_NAME
+            value: "$MARIADB_NAME"
+          - name: MARIADB_PASSWORD
+            value: "$MARIADB_PASSWORD"
+          - name: MARIADB_PORT
+            value: "$MARIADB_PORT"
+          - name: MARIADB_USER
+            value: "$MARIADB_USER"
+          - name: PORT
+            value: "$PORT"
+          - name: PRIVATE_KEY
+            value: "$PRIVATE_KEY"
+          - name: GOOGLE_CLIENT_ID
+            value: "$GOOGLE_CLIENT_ID"
+          - name: FACEBOOK_CLIENT_ID
+            value: "$FACEBOOK_CLIENT_ID"
+          - name: EMAIL_USER
+            value: "$EMAIL_USER"
+          - name: EMAIL_PORT
+            value: "$EMAIL_PORT"
+          - name: EMAIL_PASSWORD
+            value: "$EMAIL_PASSWORD"
+          - name: EMAIL_HOST
+            value: "$EMAIL_HOST"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cloud.google.com/neg: '{"ingress":true}'
+  finalizers:
+    - service.kubernetes.io/load-balancer-cleanup
+  labels:
+    app: x-collection-auto-deployment
+  name: x-collection-auto-deployment
+  namespace: default
+spec:
+  ports:
+    - nodePort: 30741
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: x-collection-auto-deployment
+  sessionAffinity: None
+  type: LoadBalancer
